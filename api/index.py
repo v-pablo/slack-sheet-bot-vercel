@@ -1,4 +1,4 @@
-# --- Vercel Project Structure ---
+ --- Vercel Project Structure ---
 # Your project needs to be organized in this exact structure in your GitHub repository.
 #
 # / (root directory)
@@ -11,7 +11,7 @@
 # |- vercel.json       <-- The configuration file for Vercel.
 
 # --- File 1: api/index.py ---
-# This is the UPDATED file. It adds more detailed logging to the security function.
+# This is the UPDATED file. It now correctly handles GET requests vs POST requests.
 
 import os
 import re
@@ -43,7 +43,6 @@ def verify_slack_request(request_body, timestamp, signature):
         logging.error("Verification failed: Missing secret, timestamp, or signature.")
         return False
 
-    # Check if the timestamp is too old (more than 5 minutes)
     try:
         req_timestamp = int(timestamp)
         if abs(time.time() - req_timestamp) > 60 * 5:
@@ -60,10 +59,6 @@ def verify_slack_request(request_body, timestamp, signature):
         hashlib.sha256
     ).hexdigest()
     
-    # Log the calculated signature for debugging
-    logging.info(f"Received Signature:  {signature}")
-    logging.info(f"Calculated Signature: {my_signature}")
-    
     is_valid = hmac.compare_digest(my_signature, signature)
     if not is_valid:
         logging.error("Verification failed: Signatures do not match.")
@@ -77,7 +72,7 @@ def parse_and_append(message_text):
     Parses a message and appends it to the Google Sheet.
     This function will be run in a separate thread.
     """
-    if ":incoming_envelope:A new charter request has been received" not in message_text:
+    if "A new charter request has been received" not in message_text:
         return
 
     logging.info("Parsing a new charter request message.")
@@ -158,38 +153,37 @@ def append_to_sheet(data):
 
 @app.route("/", methods=["GET", "POST"])
 def slack_events():
-    """This endpoint now manually handles Slack's security and events."""
+    """This endpoint now handles GET and POST requests differently."""
     
-    # --- Security Verification ---
-    signature = request.headers.get('X-Slack-Signature')
-    timestamp = request.headers.get('X-Slack-Request-Timestamp')
-    request_body = request.get_data().decode('utf-8')
+    if request.method == "GET":
+        # A GET request is likely a browser or health check, not a Slack event.
+        return make_response("Bot is alive and listening for POST requests from Slack.", 200)
 
-    # --- DEBUGGING LOGS ---
-    logging.info("--- Incoming Slack Request ---")
-    if SLACK_SIGNING_SECRET:
-        logging.info(f"Secret Loaded (partial): {SLACK_SIGNING_SECRET[:5]}...{SLACK_SIGNING_SECRET[-5:]}")
-    else:
-        logging.info("Secret NOT LOADED")
-    # --- END DEBUGGING LOGS ---
+    # --- Handle POST requests from Slack ---
+    if request.method == "POST":
+        # --- Security Verification ---
+        signature = request.headers.get('X-Slack-Signature')
+        timestamp = request.headers.get('X-Slack-Request-Timestamp')
+        request_body = request.get_data().decode('utf-8')
 
-    if not verify_slack_request(request_body, timestamp, signature):
-        logging.error("Slack request verification FAILED!")
-        return make_response("Invalid request", 403)
+        if not verify_slack_request(request_body, timestamp, signature):
+            logging.error("Slack request verification FAILED!")
+            return make_response("Invalid request", 403)
 
-    # --- Slack URL Verification Handshake ---
-    body = json.loads(request_body)
-    if body.get("type") == "url_verification":
-        return make_response(body.get("challenge"), 200, {"Content-Type": "text/plain"})
+        # --- Slack URL Verification Handshake ---
+        body = json.loads(request_body)
+        if body.get("type") == "url_verification":
+            return make_response(body.get("challenge"), 200, {"Content-Type": "text/plain"})
 
-    # --- Handle Message Events ---
-    if body.get("type") == "event_callback":
-        event = body.get("event", {})
-        if event.get("type") == "message" and not event.get("bot_id"):
-            # Run the parsing and sheet appending in a separate thread
-            # This ensures we respond to Slack quickly to avoid timeouts
-            thread = Thread(target=parse_and_append, args=[event.get("text", "")])
-            thread.start()
+        # --- Handle Message Events ---
+        if body.get("type") == "event_callback":
+            event = body.get("event", {})
+            if event.get("type") == "message" and not event.get("bot_id"):
+                thread = Thread(target=parse_and_append, args=[event.get("text", "")])
+                thread.start()
+        
+        # Respond to Slack immediately
+        return make_response("", 200)
     
-    # Respond to Slack immediately to acknowledge receipt
-    return make_response("", 200)
+    # Fallback for other request types
+    return make_response("Not Found", 404)
