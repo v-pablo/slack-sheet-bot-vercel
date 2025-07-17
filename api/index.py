@@ -12,7 +12,6 @@
 
 # --- File 1: api/index.py ---
 # This is the UPDATED file. This version changes how the handler is initialized to prevent the Vercel error.
-
 from flask import Flask, request
 import os
 import re
@@ -28,14 +27,18 @@ from googleapiclient.discovery import build
 
 logging.basicConfig(level=logging.INFO)
 
-# Initialize Flask app - Vercel looks for this 'app' object.
-app = Flask(__name__)
-
 # Initialize the Slack App using environment variables
 slack_app = App(
     token=os.environ.get("SLACK_BOT_TOKEN"),
-    signing_secret=os.environ.get("SLACK_SIGNING_SECRET")
+    signing_secret=os.environ.get("SLACK_SIGNING_SECRET"),
+    process_before_response=True # Recommended for serverless environments
 )
+
+# Initialize Flask app - Vercel will look for this 'app' object.
+app = Flask(__name__)
+
+# Create a handler that connects the Slack App to the Flask App
+handler = SlackRequestHandler(slack_app)
 
 # --- Data Parsing Logic ---
 
@@ -44,7 +47,7 @@ def parse_message_text(text):
     Parses the raw text from a Slack message to extract charter details.
     Returns a dictionary with the extracted data or None if parsing fails.
     """
-    if ":incoming_envelope: A new charter request has been received, details below:" not in text:
+    if "A new charter request has been received" not in text:
         return None
 
     logging.info("Parsing a new charter request message.")
@@ -148,16 +151,10 @@ def handle_message_events(body, logger):
 
 # --- Vercel Entry Point ---
 
+# This route now listens on the root path "/" for all requests.
 @app.route("/", methods=["GET", "POST"])
 def slack_events():
     """
-    This endpoint now initializes the handler inside the function call.
-    This can resolve complex loading issues with Vercel's environment.
+    This endpoint handles all incoming requests from Slack.
     """
-    handler = SlackRequestHandler(slack_app)
     return handler.handle(request)
-
-# This part is for local testing and won't be used by Vercel.
-if __name__ == "__main__":
-    app.run(port=3000)
-
