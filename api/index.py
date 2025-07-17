@@ -11,16 +11,17 @@
 # |- vercel.json       <-- The configuration file for Vercel.
 
 # --- File 1: api/index.py ---
-# This file uses the standard Flask adapter, which is the most reliable for Vercel.
+# This is the FINAL updated file. It removes the SlackRequestHandler and handles requests manually for maximum stability.
 
 import os
 import re
 import json
 import logging
+import hashlib
+import hmac
 from datetime import datetime
-from flask import Flask, request
-from slack_bolt import App
-from slack_bolt.adapter.flask import SlackRequestHandler
+from flask import Flask, request, make_response
+from threading import Thread
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
@@ -31,25 +32,33 @@ logging.basicConfig(level=logging.INFO)
 # Initialize Flask app - Vercel will look for this 'app' object.
 app = Flask(__name__)
 
-# Initialize the Slack App using environment variables
-slack_app = App(
-    token=os.environ.get("SLACK_BOT_TOKEN"),
-    signing_secret=os.environ.get("SLACK_SIGNING_SECRET"),
-    process_before_response=True # Recommended for serverless environments
-)
+SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET")
 
-# Create a handler that connects the Slack App to the Flask App
-handler = SlackRequestHandler(slack_app)
+# --- Security Verification ---
 
-# --- Data Parsing Logic ---
+def verify_slack_request(request_body, timestamp, signature):
+    """Verifies the request signature from Slack."""
+    if not SLACK_SIGNING_SECRET or not timestamp or not signature:
+        return False
+    
+    basestring = f"v0:{timestamp}:{request_body}".encode('utf-8')
+    my_signature = 'v0=' + hmac.new(
+        SLACK_SIGNING_SECRET.encode('utf-8'),
+        basestring,
+        hashlib.sha256
+    ).hexdigest()
+    
+    return hmac.compare_digest(my_signature, signature)
 
-def parse_message_text(text):
+# --- Data Parsing and Sheets Logic ---
+
+def parse_and_append(message_text):
     """
-    Parses the raw text from a Slack message to extract charter details.
-    Returns a dictionary with the extracted data or None if parsing fails.
+    Parses a message and appends it to the Google Sheet.
+    This function will be run in a separate thread.
     """
-    if "A new charter request has been received" not in text:
-        return None
+    if "A new charter request has been received" not in message_text:
+        return
 
     logging.info("Parsing a new charter request message.")
     
@@ -63,7 +72,7 @@ def parse_message_text(text):
     
     data = {}
     for key, pattern in patterns.items():
-        match = re.search(pattern, text, re.DOTALL)
+        match = re.search(pattern, message_text, re.DOTALL)
         if match:
             data[key] = match.group(1).strip()
         else:
@@ -82,16 +91,13 @@ def parse_message_text(text):
 
     if not data.get('charter_id'):
         logging.error("Parsing failed: Charter ID is missing.")
-        return None
+        return
         
-    return data
-
-# --- Google Sheets Logic ---
+    logging.info(f"Successfully parsed data: {data}")
+    append_to_sheet(data)
 
 def append_to_sheet(data):
-    """
-    Appends the extracted data as a new row to the configured Google Sheet.
-    """
+    """Appends the extracted data as a new row to the configured Google Sheet."""
     try:
         SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID")
         RANGE_NAME = "Sheet1"
@@ -125,36 +131,36 @@ def append_to_sheet(data):
         ).execute()
         
         logging.info(f"{result.get('updates').get('updatedCells')} cells appended.")
-        return True
-
     except Exception as e:
         logging.error(f"Error appending to Google Sheet: {e}")
-        return False
-
-# --- Slack Event Listener ---
-
-@slack_app.event("message")
-def handle_message_events(body, logger):
-    """
-    Listens for any new message events in channels the bot is a member of.
-    """
-    logger.info(body)
-    
-    message = body.get("event", {})
-    text = message.get("text")
-    if message.get("bot_id"):
-        return
-
-    parsed_data = parse_message_text(text)
-    
-    if parsed_data:
-        append_to_sheet(parsed_data)
 
 # --- Vercel Entry Point ---
-# This route now listens on the root path "/" for all requests from Slack.
+
 @app.route("/", methods=["GET", "POST"])
 def slack_events():
-    """
-    This endpoint handles all incoming requests from Slack.
-    """
-    return handler.handle(request)
+    """This endpoint now manually handles Slack's security and events."""
+    
+    # --- Security Verification ---
+    signature = request.headers.get('X-Slack-Signature')
+    timestamp = request.headers.get('X-Slack-Request-Timestamp')
+    request_body = request.get_data().decode('utf-8')
+
+    if not verify_slack_request(request_body, timestamp, signature):
+        return make_response("Invalid request", 403)
+
+    # --- Slack URL Verification Handshake ---
+    body = json.loads(request_body)
+    if body.get("type") == "url_verification":
+        return make_response(body.get("challenge"), 200, {"Content-Type": "text/plain"})
+
+    # --- Handle Message Events ---
+    if body.get("type") == "event_callback":
+        event = body.get("event", {})
+        if event.get("type") == "message" and not event.get("bot_id"):
+            # Run the parsing and sheet appending in a separate thread
+            # This ensures we respond to Slack quickly to avoid timeouts
+            thread = Thread(target=parse_and_append, args=[event.get("text", "")])
+            thread.start()
+    
+    # Respond to Slack immediately to acknowledge receipt
+    return make_response("", 200)
