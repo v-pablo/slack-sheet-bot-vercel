@@ -2,3 +2,4 @@ slack_bolt==1.18.1
 google-api-python-client==2.115.0
 google-auth-httplib2==0.1.1
 google-auth-oauthlib==1.2.0
+gunicorn==21.2.0
