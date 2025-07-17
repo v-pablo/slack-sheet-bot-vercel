@@ -1,9 +1,7 @@
-# This file lists the Python libraries the bot depends on.
+# This is the UPDATED file. Replace your existing requirements.txt with this content.
 
-flask
-slack_bolt
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
-
-
+flask==2.3.3
+slack_bolt==1.18.1
+google-api-python-client==2.115.0
+google-auth-httplib2==0.1.1
+google-auth-oauthlib==1.2.0
