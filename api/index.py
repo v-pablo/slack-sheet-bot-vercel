@@ -1,3 +1,6 @@
+# --- File 1: api/index.py ---
+# This is the main Python script. It's now a small web server using Flask.
+
 from flask import Flask, request, jsonify
 import os
 import re
@@ -13,15 +16,15 @@ from googleapiclient.discovery import build
 
 logging.basicConfig(level=logging.INFO)
 
-# Initialize Flask app
-flask_app = Flask(__name__)
+# Initialize Flask app - Renamed from flask_app to app for Vercel compatibility
+app = Flask(__name__)
 
 # Initialize the Slack App using environment variables
-app = App(
+slack_app = App(
     token=os.environ.get("SLACK_BOT_TOKEN"),
     signing_secret=os.environ.get("SLACK_SIGNING_SECRET")
 )
-handler = SlackRequestHandler(app)
+handler = SlackRequestHandler(slack_app)
 
 # --- Data Parsing Logic ---
 
@@ -30,7 +33,7 @@ def parse_message_text(text):
     Parses the raw text from a Slack message to extract charter details.
     Returns a dictionary with the extracted data or None if parsing fails.
     """
-    if not text.strip().startswith(":incoming_envelope: A new charter request has been received"):
+    if not text.strip().startswith("A new charter request has been received"):
         return None
 
     logging.info("Parsing a new charter request message.")
@@ -115,7 +118,7 @@ def append_to_sheet(data):
 
 # --- Slack Event Listener ---
 
-@app.event("message")
+@slack_app.event("message")
 def handle_message_events(body, logger):
     """
     Listens for any new message events in channels the bot is a member of.
@@ -134,7 +137,7 @@ def handle_message_events(body, logger):
 
 # --- Vercel Entry Point ---
 
-@flask_app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET", "POST"])
 def slack_events():
     """
     This is the single endpoint that Vercel will expose.
@@ -144,4 +147,4 @@ def slack_events():
 
 # This is necessary for local testing, but Vercel will use the flask_app object directly.
 if __name__ == "__main__":
-    flask_app.run(port=3000)
+    app.run(port=3000)
