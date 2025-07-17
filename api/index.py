@@ -11,7 +11,7 @@
 # |- vercel.json       <-- The configuration file for Vercel.
 
 # --- File 1: api/index.py ---
-# This is the UPDATED file. It reverts to using the Flask adapter, which is more stable on Vercel.
+# This file uses the standard Flask adapter, which is the most reliable for Vercel.
 
 import os
 import re
