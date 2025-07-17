@@ -1,6 +1,5 @@
 # This is the UPDATED file. Replace your existing requirements.txt with this content.
 
-flask==2.3.3
 slack_bolt==1.18.1
 google-api-python-client==2.115.0
 google-auth-httplib2==0.1.1
