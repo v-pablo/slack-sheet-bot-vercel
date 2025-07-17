@@ -11,7 +11,7 @@
 # |- vercel.json       <-- The configuration file for Vercel.
 
 # --- File 1: api/index.py ---
-# This is the UPDATED file. It adds logging to help debug the "Invalid request" error.
+# This is the UPDATED file. It adds more detailed logging to the security function.
 
 import os
 import re
@@ -19,6 +19,7 @@ import json
 import logging
 import hashlib
 import hmac
+import time
 from datetime import datetime
 from flask import Flask, request, make_response
 from threading import Thread
@@ -39,6 +40,17 @@ SLACK_SIGNING_SECRET = os.environ.get("SLACK_SIGNING_SECRET")
 def verify_slack_request(request_body, timestamp, signature):
     """Verifies the request signature from Slack."""
     if not SLACK_SIGNING_SECRET or not timestamp or not signature:
+        logging.error("Verification failed: Missing secret, timestamp, or signature.")
+        return False
+
+    # Check if the timestamp is too old (more than 5 minutes)
+    try:
+        req_timestamp = int(timestamp)
+        if abs(time.time() - req_timestamp) > 60 * 5:
+            logging.error(f"Verification failed: Timestamp is too old. Server time: {time.time()}, Slack time: {req_timestamp}")
+            return False
+    except (ValueError, TypeError):
+        logging.error("Verification failed: Invalid timestamp format.")
         return False
     
     basestring = f"v0:{timestamp}:{request_body}".encode('utf-8')
@@ -48,7 +60,15 @@ def verify_slack_request(request_body, timestamp, signature):
         hashlib.sha256
     ).hexdigest()
     
-    return hmac.compare_digest(my_signature, signature)
+    # Log the calculated signature for debugging
+    logging.info(f"Received Signature:  {signature}")
+    logging.info(f"Calculated Signature: {my_signature}")
+    
+    is_valid = hmac.compare_digest(my_signature, signature)
+    if not is_valid:
+        logging.error("Verification failed: Signatures do not match.")
+    
+    return is_valid
 
 # --- Data Parsing and Sheets Logic ---
 
@@ -147,9 +167,6 @@ def slack_events():
 
     # --- DEBUGGING LOGS ---
     logging.info("--- Incoming Slack Request ---")
-    logging.info(f"Timestamp: {timestamp}")
-    logging.info(f"Signature: {signature}")
-    # Log only a portion of the secret to confirm it's loaded, without exposing the full secret.
     if SLACK_SIGNING_SECRET:
         logging.info(f"Secret Loaded (partial): {SLACK_SIGNING_SECRET[:5]}...{SLACK_SIGNING_SECRET[-5:]}")
     else:
