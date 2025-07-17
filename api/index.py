@@ -44,7 +44,7 @@ def parse_message_text(text):
     Parses the raw text from a Slack message to extract charter details.
     Returns a dictionary with the extracted data or None if parsing fails.
     """
-    if "A new charter request has been received" not in text:
+    if ":incoming_envelope: A new charter request has been received, details below:" not in text:
         return None
 
     logging.info("Parsing a new charter request message.")
