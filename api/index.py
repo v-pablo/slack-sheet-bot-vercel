@@ -11,7 +11,7 @@
 # |- vercel.json       <-- The configuration file for Vercel.
 
 # --- File 1: api/index.py ---
-# This is the FINAL updated file. It removes the SlackRequestHandler and handles requests manually for maximum stability.
+# This is the UPDATED file. It adds logging to help debug the "Invalid request" error.
 
 import os
 import re
@@ -145,7 +145,19 @@ def slack_events():
     timestamp = request.headers.get('X-Slack-Request-Timestamp')
     request_body = request.get_data().decode('utf-8')
 
+    # --- DEBUGGING LOGS ---
+    logging.info("--- Incoming Slack Request ---")
+    logging.info(f"Timestamp: {timestamp}")
+    logging.info(f"Signature: {signature}")
+    # Log only a portion of the secret to confirm it's loaded, without exposing the full secret.
+    if SLACK_SIGNING_SECRET:
+        logging.info(f"Secret Loaded (partial): {SLACK_SIGNING_SECRET[:5]}...{SLACK_SIGNING_SECRET[-5:]}")
+    else:
+        logging.info("Secret NOT LOADED")
+    # --- END DEBUGGING LOGS ---
+
     if not verify_slack_request(request_body, timestamp, signature):
+        logging.error("Slack request verification FAILED!")
         return make_response("Invalid request", 403)
 
     # --- Slack URL Verification Handshake ---
