@@ -11,15 +11,16 @@
 # |- vercel.json       <-- The configuration file for Vercel.
 
 # --- File 1: api/index.py ---
-# This is the UPDATED file. It uses a cleaner WSGI structure for better Vercel compatibility.
+# This is the UPDATED file. It reverts to using the Flask adapter, which is more stable on Vercel.
 
 import os
 import re
 import json
 import logging
 from datetime import datetime
+from flask import Flask, request
 from slack_bolt import App
-from slack_bolt.adapter.wsgi import SlackRequestHandler
+from slack_bolt.adapter.flask import SlackRequestHandler
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
@@ -27,12 +28,18 @@ from googleapiclient.discovery import build
 
 logging.basicConfig(level=logging.INFO)
 
-# Initialize the Slack App using environment variables.
+# Initialize Flask app - Vercel will look for this 'app' object.
+app = Flask(__name__)
+
+# Initialize the Slack App using environment variables
 slack_app = App(
     token=os.environ.get("SLACK_BOT_TOKEN"),
     signing_secret=os.environ.get("SLACK_SIGNING_SECRET"),
     process_before_response=True # Recommended for serverless environments
 )
+
+# Create a handler that connects the Slack App to the Flask App
+handler = SlackRequestHandler(slack_app)
 
 # --- Data Parsing Logic ---
 
@@ -144,6 +151,10 @@ def handle_message_events(body, logger):
         append_to_sheet(parsed_data)
 
 # --- Vercel Entry Point ---
-# By convention, Vercel looks for a WSGI-compatible object named 'app'.
-# The SlackRequestHandler creates this for us from our slack_app instance.
-app = SlackRequestHandler(slack_app)
+# This route now listens on the root path "/" for all requests from Slack.
+@app.route("/", methods=["GET", "POST"])
+def slack_events():
+    """
+    This endpoint handles all incoming requests from Slack.
+    """
+    return handler.handle(request)
