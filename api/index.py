@@ -77,7 +77,7 @@ def parse_and_append(message_text):
     Parses a message and appends it to the Google Sheet.
     This function will be run in a separate thread.
     """
-    if "A new charter request has been received" not in message_text:
+    if ":incoming_envelope:A new charter request has been received" not in message_text:
         return
 
     logging.info("Parsing a new charter request message.")
