@@ -1,5 +1,3 @@
-# This file tells Vercel how to build and run the project.
-
 {
   "builds": [
     {
