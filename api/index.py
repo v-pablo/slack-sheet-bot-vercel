@@ -11,15 +11,15 @@
 # |- vercel.json       <-- The configuration file for Vercel.
 
 # --- File 1: api/index.py ---
-# This is the UPDATED file. This version changes how the handler is initialized to prevent the Vercel error.
-from flask import Flask, request
+# This is the FINAL updated file. This version removes Flask entirely to resolve the Vercel error.
+
 import os
 import re
 import json
 import logging
 from datetime import datetime
 from slack_bolt import App
-from slack_bolt.adapter.flask import SlackRequestHandler
+from slack_bolt.adapter.wsgi import SlackRequestHandler
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
@@ -27,18 +27,13 @@ from googleapiclient.discovery import build
 
 logging.basicConfig(level=logging.INFO)
 
-# Initialize the Slack App using environment variables
-slack_app = App(
+# Initialize the Slack App using environment variables.
+# This is now the main application object.
+app = App(
     token=os.environ.get("SLACK_BOT_TOKEN"),
     signing_secret=os.environ.get("SLACK_SIGNING_SECRET"),
     process_before_response=True # Recommended for serverless environments
 )
-
-# Initialize Flask app - Vercel will look for this 'app' object.
-app = Flask(__name__)
-
-# Create a handler that connects the Slack App to the Flask App
-handler = SlackRequestHandler(slack_app)
 
 # --- Data Parsing Logic ---
 
@@ -132,7 +127,7 @@ def append_to_sheet(data):
 
 # --- Slack Event Listener ---
 
-@slack_app.event("message")
+@app.event("message")
 def handle_message_events(body, logger):
     """
     Listens for any new message events in channels the bot is a member of.
@@ -148,13 +143,3 @@ def handle_message_events(body, logger):
     
     if parsed_data:
         append_to_sheet(parsed_data)
-
-# --- Vercel Entry Point ---
-
-# This route now listens on the root path "/" for all requests.
-@app.route("/", methods=["GET", "POST"])
-def slack_events():
-    """
-    This endpoint handles all incoming requests from Slack.
-    """
-    return handler.handle(request)
