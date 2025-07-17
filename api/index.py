@@ -1,4 +1,4 @@
- --- Vercel Project Structure ---
+# --- Vercel Project Structure ---
 # Your project needs to be organized in this exact structure in your GitHub repository.
 #
 # / (root directory)
