@@ -1,4 +1,17 @@
-# This is the FINAL corrected file. It no longer imports or uses the Flask framework.
+# --- Vercel Project Structure ---
+# Your project needs to be organized in this exact structure in your GitHub repository.
+#
+# / (root directory)
+# |
+# |- api/
+# |  |- index.py      <-- The main Python bot logic goes here.
+# |
+# |- requirements.txt  <-- The list of Python libraries.
+# |
+# |- vercel.json       <-- The configuration file for Vercel.
+
+# --- File 1: api/index.py ---
+# This is the UPDATED file. It uses a cleaner WSGI structure for better Vercel compatibility.
 
 import os
 import re
@@ -15,8 +28,7 @@ from googleapiclient.discovery import build
 logging.basicConfig(level=logging.INFO)
 
 # Initialize the Slack App using environment variables.
-# This is now the main application object that Vercel will run.
-app = App(
+slack_app = App(
     token=os.environ.get("SLACK_BOT_TOKEN"),
     signing_secret=os.environ.get("SLACK_SIGNING_SECRET"),
     process_before_response=True # Recommended for serverless environments
@@ -114,7 +126,7 @@ def append_to_sheet(data):
 
 # --- Slack Event Listener ---
 
-@app.event("message")
+@slack_app.event("message")
 def handle_message_events(body, logger):
     """
     Listens for any new message events in channels the bot is a member of.
@@ -132,6 +144,6 @@ def handle_message_events(body, logger):
         append_to_sheet(parsed_data)
 
 # --- Vercel Entry Point ---
-# The handler now directly exposes the Slack App as a WSGI application.
-# Vercel will call this 'handler' object.
-handler = SlackRequestHandler(app)
+# By convention, Vercel looks for a WSGI-compatible object named 'app'.
+# The SlackRequestHandler creates this for us from our slack_app instance.
+app = SlackRequestHandler(slack_app)
