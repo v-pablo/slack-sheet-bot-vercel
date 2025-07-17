@@ -1,7 +1,6 @@
-# --- File 1: api/index.py ---
-# This is the main Python script. It's now a small web server using Flask.
+# This is the UPDATED file. This version uses a more explicit Flask structure to resolve the Vercel error.
 
-from flask import Flask, request, jsonify
+from flask import Flask, request
 import os
 import re
 import json
@@ -16,14 +15,16 @@ from googleapiclient.discovery import build
 
 logging.basicConfig(level=logging.INFO)
 
-# Initialize Flask app - Renamed from flask_app to app for Vercel compatibility
+# Initialize Flask app - Vercel looks for this 'app' object.
 app = Flask(__name__)
 
 # Initialize the Slack App using environment variables
+# We now name this 'slack_app' to distinguish it from the Flask 'app'
 slack_app = App(
     token=os.environ.get("SLACK_BOT_TOKEN"),
     signing_secret=os.environ.get("SLACK_SIGNING_SECRET")
 )
+# The handler is now associated with the 'slack_app'
 handler = SlackRequestHandler(slack_app)
 
 # --- Data Parsing Logic ---
@@ -33,7 +34,8 @@ def parse_message_text(text):
     Parses the raw text from a Slack message to extract charter details.
     Returns a dictionary with the extracted data or None if parsing fails.
     """
-    if not text.strip().startswith("A new charter request has been received"):
+    # Using a more flexible check to see if the core phrase is present
+    if ":incoming_envelope: A new charter request has been received" not in text:
         return None
 
     logging.info("Parsing a new charter request message.")
@@ -48,7 +50,8 @@ def parse_message_text(text):
     
     data = {}
     for key, pattern in patterns.items():
-        match = re.search(pattern, text)
+        # Use re.DOTALL to make '.' match newlines, which can happen in Slack messages
+        match = re.search(pattern, text, re.DOTALL)
         if match:
             data[key] = match.group(1).strip()
         else:
@@ -127,6 +130,7 @@ def handle_message_events(body, logger):
     
     message = body.get("event", {})
     text = message.get("text")
+    # Ignore messages from bots to prevent loops
     if message.get("bot_id"):
         return
 
@@ -137,14 +141,12 @@ def handle_message_events(body, logger):
 
 # --- Vercel Entry Point ---
 
+# This is the main endpoint Vercel will route traffic to.
+# It's a standard Flask route.
 @app.route("/", methods=["GET", "POST"])
 def slack_events():
     """
-    This is the single endpoint that Vercel will expose.
-    It passes all incoming requests to the SlackRequestHandler.
+    This endpoint now explicitly calls the SlackRequestHandler to process
+    the incoming request from Slack. This is a more robust pattern for Vercel.
     """
     return handler.handle(request)
-
-# This is necessary for local testing, but Vercel will use the flask_app object directly.
-if __name__ == "__main__":
-    app.run(port=3000)
