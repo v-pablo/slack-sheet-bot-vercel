@@ -86,18 +86,23 @@ def parse_and_append(message_text):
     
     # THE FIX: Made patterns even more flexible.
     patterns = {
-        'charter_id': r"\*?Charter\s*Id\*?:\s*(\d+)",
-        'name': r"\*?Name\*?:\s*(.+)",
-        'phone': r"\*?Phone\*?:\s*([0-9\s+()-]+)",
-        'pick_up_date': r"\*?Pick\s*up\s*date\*?:\s*([\d-]+)",
-        'return_date': r"\*?Return\s*date\*?:\s*([\d-]+)"
+        'charter_id': r"Charter Id[^\d]*(\d+)",
+        'name': r"Name\s*:\s*(.+)", # Name is usually consistent
+        'phone': r"Phone[^\d]*([\d\s+()-]+)",
+        'pick_up_date': r"Pick up date[^\d]*([\d-]+)",
+        'return_date': r"Return date[^\d]*([\d-]+)"
     }
     
     data = {}
     for key, pattern in patterns.items():
         match = re.search(pattern, message_text, re.DOTALL | re.IGNORECASE)
         if match:
-            data[key] = match.group(1).strip()
+            # For 'name', we need to clean up potential leftover Slack formatting
+            value = match.group(1).strip()
+            if key == 'name':
+                # Remove email links that Slack might add
+                value = re.sub(r'<mailto:.*\|(.*?)>', r'\1', value)
+            data[key] = value
         else:
             logging.warning(f"Could not find pattern for: {key}")
             data[key] = ""
