@@ -80,7 +80,7 @@ def parse_and_append(message_text):
     patterns = {
         'charter_id': r"Charter\s*Id\s*:\s*(\d+)",
         'name': r"Name\s*:\s*(.+)",
-        'phone': r"Phone\s*:\s*([\d\s]+)",
+        'phone': r"Phone\s*:\s*([0-9\s+()-]+)",
         'pick_up_date': r"Pick\s*up\s*date\s*:\s*([\d-]+)",
         'return_date': r"Return\s*date\s*:\s*([\d-]+)"
     }
