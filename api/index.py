@@ -79,18 +79,18 @@ def parse_and_append(message_text):
     logging.info("--- END RAW TEXT ---")
     # --- END DEBUGGING LOG ---
 
-    if "A new charter request has been received" not in message_text:
+    if ":incoming_envelope: A new charter request has been received" not in message_text:
         return
 
     logging.info("Parsing a new charter request message.")
     
     # THE FIX: Made patterns even more flexible.
     patterns = {
-        'charter_id': r"Charter\s*Id\s*:\s*(\d+)",
-        'name': r"Name\s*:\s*(.+)",
-        'phone': r"Phone\s*:\s*([0-9\s+()-]+)",
-        'pick_up_date': r"Pick\s*up\s*date\s*:\s*([\d-]+)",
-        'return_date': r"Return\s*date\s*:\s*([\d-]+)"
+        'charter_id': r"\*?Charter\s*Id\*?:\s*(\d+)",
+        'name': r"\*?Name\*?:\s*(.+)",
+        'phone': r"\*?Phone\*?:\s*([0-9\s+()-]+)",
+        'pick_up_date': r"\*?Pick\s*up\s*date\*?:\s*([\d-]+)",
+        'return_date': r"\*?Return\s*date\*?:\s*([\d-]+)"
     }
     
     data = {}
