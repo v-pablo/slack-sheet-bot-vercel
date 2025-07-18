@@ -78,14 +78,12 @@ def parse_and_append(message_text):
     logging.info("Parsing a new charter request message.")
     
     patterns = {
-        'charter_id': r"Charter Id:\s*(\d+)",
-        'name': r"Name:\s*(.+)",
-        'phone': r"Phone:\s*([\d\s]+)",
-        'pick_up_date': r"Pick up date:\s*([\d-]+)",
-        'return_date': r"Return date:\s*([\d-]+)"
+        'charter_id': r"Charter\s*Id\s*:\s*(\d+)",
+        'name': r"Name\s*:\s*(.+)",
+        'phone': r"Phone\s*:\s*([\d\s]+)",
+        'pick_up_date': r"Pick\s*up\s*date\s*:\s*([\d-]+)",
+        'return_date': r"Return\s*date\s*:\s*([\d-]+)"
     }
-
-       
     
     data = {}
     for key, pattern in patterns.items():
