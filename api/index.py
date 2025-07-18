@@ -11,7 +11,7 @@
 # |- vercel.json       <-- The configuration file for Vercel.
 
 # --- File 1: api/index.py ---
-# This is the UPDATED file. It adds raw message logging and has more robust regex.
+# This is the UPDATED file. The initial check is now more flexible.
 
 import os
 import re
@@ -72,22 +72,20 @@ def parse_and_append(message_text):
     Parses a message and appends it to the Google Sheet.
     This function will be run in a separate thread.
     """
-    # --- NEW DEBUGGING LOG ---
-    # This will show us the exact text the bot is receiving, including hidden characters.
     logging.info("--- RAW SLACK MESSAGE TEXT ---")
     logging.info(repr(message_text)) 
     logging.info("--- END RAW TEXT ---")
-    # --- END DEBUGGING LOG ---
 
-    if ":incoming_envelope: A new charter request has been received" not in message_text:
+    # THE FIX: This check is now more flexible and case-insensitive.
+    if "charter request" not in message_text.lower():
+        logging.warning("Message did not contain 'charter request'. Ignoring.")
         return
 
     logging.info("Parsing a new charter request message.")
     
-    # THE FIX: Made patterns even more flexible.
     patterns = {
         'charter_id': r"Charter Id[^\d]*(\d+)",
-        'name': r"Name\s*:\s*(.+)", # Name is usually consistent
+        'name': r"Name\s*:\s*(.+)",
         'phone': r"Phone[^\d]*([\d\s+()-]+)",
         'pick_up_date': r"Pick up date[^\d]*([\d-]+)",
         'return_date': r"Return date[^\d]*([\d-]+)"
@@ -97,10 +95,8 @@ def parse_and_append(message_text):
     for key, pattern in patterns.items():
         match = re.search(pattern, message_text, re.DOTALL | re.IGNORECASE)
         if match:
-            # For 'name', we need to clean up potential leftover Slack formatting
             value = match.group(1).strip()
             if key == 'name':
-                # Remove email links that Slack might add
                 value = re.sub(r'<mailto:.*\|(.*?)>', r'\1', value)
             data[key] = value
         else:
@@ -169,12 +165,9 @@ def slack_events():
     """This endpoint now handles GET and POST requests differently."""
     
     if request.method == "GET":
-        # A GET request is likely a browser or health check, not a Slack event.
         return make_response("Bot is alive and listening for POST requests from Slack.", 200)
 
-    # --- Handle POST requests from Slack ---
     if request.method == "POST":
-        # --- Security Verification ---
         signature = request.headers.get('X-Slack-Signature')
         timestamp = request.headers.get('X-Slack-Request-Timestamp')
         request_body = request.get_data().decode('utf-8')
@@ -183,20 +176,16 @@ def slack_events():
             logging.error("Slack request verification FAILED!")
             return make_response("Invalid request", 403)
 
-        # --- Slack URL Verification Handshake ---
         body = json.loads(request_body)
         if body.get("type") == "url_verification":
             return make_response(body.get("challenge"), 200, {"Content-Type": "text/plain"})
 
-        # --- Handle Message Events ---
         if body.get("type") == "event_callback":
             event = body.get("event", {})
             if event.get("type") == "message" and not event.get("bot_id"):
                 thread = Thread(target=parse_and_append, args=[event.get("text", "")])
                 thread.start()
         
-        # Respond to Slack immediately
         return make_response("", 200)
     
-    # Fallback for other request types
     return make_response("Not Found", 404)
