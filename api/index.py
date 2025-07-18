@@ -11,7 +11,7 @@
 # |- vercel.json       <-- The configuration file for Vercel.
 
 # --- File 1: api/index.py ---
-# This is the UPDATED file. The initial check is now more flexible.
+# This is the UPDATED file. It now gracefully handles missing optional fields like 'return_date'.
 
 import os
 import re
@@ -76,31 +76,47 @@ def parse_and_append(message_text):
     logging.info(repr(message_text)) 
     logging.info("--- END RAW TEXT ---")
 
-    # THE FIX: This check is now more flexible and case-insensitive.
     if "charter request" not in message_text.lower():
         logging.warning("Message did not contain 'charter request'. Ignoring.")
         return
 
     logging.info("Parsing a new charter request message.")
     
-    patterns = {
-        'charter_id': r"Charter Id[^\d]*(\d+)",
-        'name': r"Name\s*:\s*(.+)",
-        'phone': r"Phone[^\d]*([\d\s+()-]+)",
-        'pick_up_date': r"Pick up date[^\d]*([\d-]+)",
-        'return_date': r"Return date[^\d]*([\d-]+)"
+    # THE FIX: Separated patterns into required and optional fields.
+    required_patterns = {
+        'charter_id': r"\*?Charter\s*Id\*?[^\d]*(\d+)",
+        'name': r"\*?Name\*?\s*:\s*([^\n]+)",
+        'phone': r"\*?Phone\*?[^\d]*([0-9\s+()-]+)",
+        'pick_up_date': r"\*?Pick\s*up\s*date\*?[^\d]*([\d-]+)",
+    }
+    
+    optional_patterns = {
+        'return_date': r"\*?Return\s*date\*?[^\d]*([\d-]+)"
     }
     
     data = {}
-    for key, pattern in patterns.items():
-        match = re.search(pattern, message_text, re.DOTALL | re.IGNORECASE)
+    
+    # Process required patterns first
+    for key, pattern in required_patterns.items():
+        match = re.search(pattern, message_text, re.IGNORECASE)
         if match:
             value = match.group(1).strip()
             if key == 'name':
                 value = re.sub(r'<mailto:.*\|(.*?)>', r'\1', value)
             data[key] = value
         else:
-            logging.warning(f"Could not find pattern for: {key}")
+            # If a required field is missing, stop processing this message.
+            logging.error(f"Parsing failed: Could not find required pattern for: {key}")
+            return
+
+    # Process optional patterns
+    for key, pattern in optional_patterns.items():
+        match = re.search(pattern, message_text, re.IGNORECASE)
+        if match:
+            data[key] = match.group(1).strip()
+        else:
+            # If an optional field is missing, log a warning and set it to an empty string.
+            logging.warning(f"Optional field '{key}' not found. Leaving it empty.")
             data[key] = ""
 
     if data.get('name'):
@@ -112,10 +128,6 @@ def parse_and_append(message_text):
         data['last_name'] = ""
     
     data['request_received_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    if not data.get('charter_id'):
-        logging.error("Parsing failed: Charter ID is missing.")
-        return
         
     logging.info(f"Successfully parsed data: {data}")
     append_to_sheet(data)
@@ -142,7 +154,7 @@ def append_to_sheet(data):
             data.get('last_name', ''),
             data.get('phone', ''),
             data.get('pick_up_date', ''),
-            data.get('return_date', '')
+            data.get('return_date', '') # This will now safely get the empty string if date was not found
         ]
 
         body = { 'values': [row_values] }
