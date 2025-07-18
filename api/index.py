@@ -11,7 +11,7 @@
 # |- vercel.json       <-- The configuration file for Vercel.
 
 # --- File 1: api/index.py ---
-# This is the UPDATED file. It now correctly handles GET requests vs POST requests.
+# This is the UPDATED file. It adds raw message logging and has more robust regex.
 
 import os
 import re
@@ -72,11 +72,19 @@ def parse_and_append(message_text):
     Parses a message and appends it to the Google Sheet.
     This function will be run in a separate thread.
     """
-    if ":incoming_envelope: A new charter request has been received" not in message_text:
+    # --- NEW DEBUGGING LOG ---
+    # This will show us the exact text the bot is receiving, including hidden characters.
+    logging.info("--- RAW SLACK MESSAGE TEXT ---")
+    logging.info(repr(message_text)) 
+    logging.info("--- END RAW TEXT ---")
+    # --- END DEBUGGING LOG ---
+
+    if "A new charter request has been received" not in message_text:
         return
 
     logging.info("Parsing a new charter request message.")
     
+    # THE FIX: Made patterns even more flexible.
     patterns = {
         'charter_id': r"Charter\s*Id\s*:\s*(\d+)",
         'name': r"Name\s*:\s*(.+)",
