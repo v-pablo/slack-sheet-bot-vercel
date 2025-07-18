@@ -84,10 +84,12 @@ def parse_and_append(message_text):
         'pick_up_date': r"Pick up date:\s*([\d-]+)",
         'return_date': r"Return date:\s*([\d-]+)"
     }
+
+       
     
     data = {}
     for key, pattern in patterns.items():
-        match = re.search(pattern, message_text, re.DOTALL)
+        match = re.search(pattern, message_text, re.DOTALL | re.IGNORECASE)
         if match:
             data[key] = match.group(1).strip()
         else:
